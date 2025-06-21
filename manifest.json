@@ -1,0 +1,82 @@
+{
+  "manifest_version": 2,
+  "name": "LLM Deep Research",
+  "version": "1.0.0",
+  "description": "Submit research queries to multiple LLM providers and save responses to Google Drive",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "identity",
+    "tabs",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
+    "https://grok.x.ai/*",
+    "https://chat.deepseek.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_CLIENT_ID",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.file"
+    ]
+  },
+  
+  "background": {
+    "scripts": ["background/background.js"],
+    "persistent": false
+  },
+  
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "LLM Deep Research",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["https://chat.openai.com/*"],
+      "js": ["content/chatgpt.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content/gemini.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content/claude.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://grok.x.ai/*"],
+      "js": ["content/grok.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://chat.deepseek.com/*"],
+      "js": ["content/deepseek.js"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "web_accessible_resources": [
+    "popup/*",
+    "styles/*"
+  ],
+  
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

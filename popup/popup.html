@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Deep Research</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="../styles/popup.css">
+</head>
+<body class="w-96 h-auto bg-gray-50">
+    <div class="p-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+            <h1 class="text-xl font-bold text-gray-800">LLM Deep Research</h1>
+            <button id="settingsBtn" class="p-2 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Main Form -->
+        <div id="mainForm">
+            <!-- Query Input -->
+            <div class="mb-4">
+                <label for="queryInput" class="block text-sm font-medium text-gray-700 mb-2">
+                    Research Query
+                </label>
+                <textarea 
+                    id="queryInput" 
+                    rows="4" 
+                    class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    placeholder="Enter your research question or topic here..."
+                ></textarea>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-2 mb-4">
+                <button 
+                    id="refineBtn" 
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Refine Prompt
+                </button>
+                <button 
+                    id="submitBtn" 
+                    class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Submit to All
+                </button>
+            </div>
+
+            <!-- Provider Selection -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    LLM Providers
+                </label>
+                <div class="space-y-2">
+                    <label class="flex items-center">
+                        <input type="checkbox" class="provider-checkbox" value="openai" checked>
+                        <span class="ml-2 text-sm">OpenAI ChatGPT</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" class="provider-checkbox" value="gemini" checked>
+                        <span class="ml-2 text-sm">Google Gemini</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" class="provider-checkbox" value="claude" checked>
+                        <span class="ml-2 text-sm">Anthropic Claude</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" class="provider-checkbox" value="grok" checked>
+                        <span class="ml-2 text-sm">Grok</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" class="provider-checkbox" value="deepseek" checked>
+                        <span class="ml-2 text-sm">DeepSeek</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refinement Dialog (Initially Hidden) -->
+        <div id="refinementDialog" class="hidden">
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Refined Prompt</h3>
+                <div id="refinedPrompt" class="p-3 bg-gray-100 border rounded-md text-sm"></div>
+            </div>
+            
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-3">Does this capture your intent?</p>
+                <div class="flex gap-2">
+                    <button id="acceptRefinement" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium">
+                        Yes, use this
+                    </button>
+                    <button id="rejectRefinement" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium">
+                        No, refine more
+                    </button>
+                </div>
+            </div>
+
+            <!-- Feedback Form (Initially Hidden) -->
+            <div id="feedbackForm" class="hidden">
+                <label for="feedbackInput" class="block text-sm font-medium text-gray-700 mb-2">
+                    What would you like to change?
+                </label>
+                <textarea 
+                    id="feedbackInput" 
+                    rows="3" 
+                    class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-3"
+                    placeholder="Describe how the prompt should be adjusted..."
+                ></textarea>
+                <div class="flex gap-2">
+                    <button id="submitFeedback" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium">
+                        Refine Again
+                    </button>
+                    <button id="cancelFeedback" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md font-medium">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div id="progressSection" class="hidden">
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Research Progress</h3>
+                <div id="progressList" class="space-y-2"></div>
+            </div>
+            <div class="flex justify-center">
+                <button id="viewResultsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium hidden">
+                    View Results in Drive
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="hidden mt-4 p-3 rounded-md"></div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

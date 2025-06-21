@@ -1,0 +1,50 @@
+{
+  "name": "llm-deep-research",
+  "version": "1.0.0",
+  "description": "Firefox extension for submitting research queries to multiple LLM providers and saving responses to Google Drive",
+  "main": "background/background.js",
+  "scripts": {
+    "build": "web-ext build --source-dir=. --artifacts-dir=dist --ignore-files=package*.json node_modules/ .git/ *.md",
+    "start": "web-ext run --source-dir=. --start-url=about:debugging",
+    "lint": "web-ext lint --source-dir=.",
+    "sign": "web-ext sign --source-dir=. --artifacts-dir=dist",
+    "dev": "web-ext run --source-dir=. --reload",
+    "zip": "zip -r llm-deep-research.zip . -x 'node_modules/*' '.git/*' '*.md' 'package*.json' 'dist/*'"
+  },
+  "keywords": [
+    "firefox",
+    "extension",
+    "llm",
+    "research",
+    "ai",
+    "chatgpt",
+    "claude",
+    "gemini",
+    "grok",
+    "deepseek"
+  ],
+  "author": "LLM Deep Research",
+  "license": "MIT",
+  "devDependencies": {
+    "web-ext": "^7.8.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/llm-deep-research"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/llm-deep-research/issues"
+  },
+  "homepage": "https://github.com/your-username/llm-deep-research#readme",
+  "webExt": {
+    "sourceDir": ".",
+    "artifactsDir": "dist",
+    "ignoreFiles": [
+      "package*.json",
+      "node_modules/**",
+      ".git/**",
+      "*.md",
+      "dist/**"
+    ]
+  }
+}
