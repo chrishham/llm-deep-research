@@ -17,12 +17,6 @@
     "https://www.googleapis.com/*"
   ],
   
-  "oauth2": {
-    "client_id": "YOUR_GOOGLE_CLIENT_ID",
-    "scopes": [
-      "https://www.googleapis.com/auth/drive.file"
-    ]
-  },
   
   "background": {
     "scripts": ["background/background.js"],
@@ -30,7 +24,6 @@
   },
   
   "browser_action": {
-    "default_popup": "popup/popup.html",
     "default_title": "LLM Deep Research",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -64,6 +57,11 @@
     {
       "matches": ["https://chat.deepseek.com/*"],
       "js": ["content/deepseek.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://drive.google.com/*"],
+      "js": ["content/googledrive.js"],
       "run_at": "document_end"
     }
   ],

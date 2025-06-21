@@ -8,7 +8,7 @@
     "start": "web-ext run --source-dir=. --start-url=about:debugging",
     "lint": "web-ext lint --source-dir=.",
     "sign": "web-ext sign --source-dir=. --artifacts-dir=dist",
-    "dev": "web-ext run --source-dir=. --reload",
+    "dev": "web-ext run --source-dir=. --reload --devtools",
     "zip": "zip -r llm-deep-research.zip . -x 'node_modules/*' '.git/*' '*.md' 'package*.json' 'dist/*'"
   },
   "keywords": [

@@ -2,6 +2,7 @@ class BackgroundController {
     constructor() {
         this.processingJobs = new Map();
         this.initMessageListener();
+        this.initBrowserActionListener();
         
         // Provider URLs for web automation
         this.providers = {
@@ -43,6 +44,17 @@ class BackgroundController {
             console.log('Background received message:', message);
             this.handleMessage(message, sender, sendResponse);
             return true; // Keep message channel open for async response
+        });
+    }
+
+    initBrowserActionListener() {
+        const browserAPI = this.getBrowserAPI();
+        browserAPI.browserAction.onClicked.addListener((tab) => {
+            // Open popup as a new tab instead of popup
+            browserAPI.tabs.create({
+                url: 'popup/popup.html',
+                active: true
+            });
         });
     }
 
@@ -155,9 +167,10 @@ Respond with only the refined query, no explanations or additional text.`;
             this.processingJobs.set(jobId, job);
 
             // Create Google Drive folder
-            const driveResult = await this.createDriveFolder();
+            const driveResult = await this.createDriveFolderForResearch();
             if (driveResult.success) {
                 job.driveFolder = driveResult.folderId;
+                job.driveTabId = driveResult.tabId;
             }
 
             // Submit to all providers in parallel
@@ -189,7 +202,7 @@ Respond with only the refined query, no explanations or additional text.`;
                 
                 // Save to Google Drive
                 if (job.driveFolder) {
-                    await this.saveToGoogleDrive(job.driveFolder, provider, result.response);
+                    await this.saveToGoogleDrive(job.driveTabId, provider, result.response);
                 }
             } else {
                 job.providers[provider].status = 'failed';
@@ -305,93 +318,51 @@ Respond with only the refined query, no explanations or additional text.`;
         return { progress, allCompleted };
     }
 
-    async createDriveFolder() {
-        try {
-            // Get OAuth token
-            const token = await this.getGoogleAuthToken();
-            if (!token) {
-                return { success: false, error: 'Google Drive authentication failed' };
-            }
-
-            const folderName = `LLM Research ${new Date().toISOString().split('T')[0]}`;
-            
-            const response = await fetch('https://www.googleapis.com/drive/v3/files', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: folderName,
-                    mimeType: 'application/vnd.google-apps.folder',
-                    parents: ['root']
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Drive API error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return { success: true, folderId: data.id };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
+    async createDriveFolderForResearch() {
+        const folderName = `LLM Research ${new Date().toISOString().split('T')[0]}`;
+        return await this.createDriveFolder(folderName);
     }
 
-    async saveToGoogleDrive(folderId, provider, content) {
+    async saveToGoogleDrive(driveTabId, provider, content) {
         try {
-            const token = await this.getGoogleAuthToken();
-            if (!token) return;
-
+            const browserAPI = this.getBrowserAPI();
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = `${timestamp}_${provider}.md`;
 
-            // Create file metadata
-            const metadata = {
-                name: filename,
-                parents: [folderId]
-            };
-
-            // Create multipart upload
-            const delimiter = '-------314159265358979323846';
-            const close_delim = `\r\n--${delimiter}--`;
-            
-            let body = `--${delimiter}\r\n`;
-            body += 'Content-Type: application/json\r\n\r\n';
-            body += JSON.stringify(metadata) + '\r\n';
-            body += `--${delimiter}\r\n`;
-            body += 'Content-Type: text/markdown\r\n\r\n';
-            body += content;
-            body += close_delim;
-
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': `multipart/related; boundary="${delimiter}"`
-                },
-                body: body
+            const result = await browserAPI.tabs.sendMessage(driveTabId, {
+                action: 'uploadFile',
+                fileName: filename,
+                content: content
             });
 
-            return response.ok;
+            return result.success;
         } catch (error) {
             console.error('Error saving to Google Drive:', error);
             return false;
         }
     }
 
-    async getGoogleAuthToken() {
+    async createDriveFolder(folderName) {
         const browserAPI = this.getBrowserAPI();
         try {
-            const result = await browserAPI.identity.getAuthToken({ 
-                interactive: true,
-                scopes: ['https://www.googleapis.com/auth/drive.file']
+            // Open Google Drive in a new tab
+            const tab = await browserAPI.tabs.create({
+                url: 'https://drive.google.com',
+                active: false
             });
-            return result.token;
+
+            // Wait for page to load and create folder
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const result = await browserAPI.tabs.sendMessage(tab.id, {
+                action: 'createFolder',
+                folderName: folderName
+            });
+
+            return { success: true, folderId: result.folderId, tabId: tab.id };
         } catch (error) {
-            console.error('Google auth error:', error);
-            return null;
+            console.error('Drive folder creation error:', error);
+            return { success: false, error: error.message };
         }
     }
 
