@@ -49,18 +49,22 @@ class PopupController {
     }
 
     saveQuery() {
-        browser.storage.local.set({ currentQuery: this.queryInput.value });
+        this.getBrowserAPI().storage.local.set({ currentQuery: this.queryInput.value });
     }
 
     async loadSavedQuery() {
         try {
-            const result = await browser.storage.local.get('currentQuery');
+            const result = await this.getBrowserAPI().storage.local.get('currentQuery');
             if (result.currentQuery) {
                 this.queryInput.value = result.currentQuery;
             }
         } catch (error) {
             console.error('Error loading saved query:', error);
         }
+    }
+
+    getBrowserAPI() {
+        return typeof browser !== 'undefined' ? browser : chrome;
     }
 
     showStatus(message, type = 'info') {
@@ -296,10 +300,20 @@ class PopupController {
 
     async sendToBackground(action, data = {}) {
         return new Promise((resolve, reject) => {
-            browser.runtime.sendMessage({ action, ...data }, response => {
-                if (browser.runtime.lastError) {
-                    reject(browser.runtime.lastError);
+            const browserAPI = this.getBrowserAPI();
+            const message = { action, ...data };
+            
+            console.log('Sending message to background:', message);
+            
+            browserAPI.runtime.sendMessage(message, response => {
+                if (browserAPI.runtime.lastError) {
+                    console.error('Runtime error:', browserAPI.runtime.lastError);
+                    reject(browserAPI.runtime.lastError);
+                } else if (!response) {
+                    console.error('No response from background script');
+                    reject(new Error('No response from background script'));
                 } else {
+                    console.log('Received response:', response);
                     resolve(response);
                 }
             });

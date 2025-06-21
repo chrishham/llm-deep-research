@@ -33,8 +33,14 @@ class BackgroundController {
         };
     }
 
+    getBrowserAPI() {
+        return typeof browser !== 'undefined' ? browser : chrome;
+    }
+
     initMessageListener() {
-        browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        const browserAPI = this.getBrowserAPI();
+        browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            console.log('Background received message:', message);
             this.handleMessage(message, sender, sendResponse);
             return true; // Keep message channel open for async response
         });
@@ -43,6 +49,7 @@ class BackgroundController {
     async handleMessage(message, sender, sendResponse) {
         try {
             let response;
+            console.log('Processing action:', message.action);
 
             switch (message.action) {
                 case 'refinePrompt':
@@ -68,38 +75,37 @@ class BackgroundController {
                     response = { success: false, error: 'Unknown action' };
             }
 
+            console.log('Sending response:', response);
             sendResponse(response);
         } catch (error) {
             console.error('Background script error:', error);
-            sendResponse({ success: false, error: error.message });
+            const errorResponse = { success: false, error: error.message };
+            console.log('Sending error response:', errorResponse);
+            sendResponse(errorResponse);
         }
     }
 
     async refinePrompt(query) {
         try {
-            // Create or find ChatGPT tab for refinement
-            const refinementPrompt = `You are an expert research assistant. Please refine and improve the following research query to make it more specific, comprehensive, and likely to yield high-quality results from AI language models.
+            // For testing purposes, provide a simple refined version
+            // TODO: Replace with actual ChatGPT automation once tabs are working
+            const refinedPrompt = `Research Analysis: ${query}
 
-Original query: "${query}"
+Please provide a comprehensive analysis that includes:
+1. Current state and key developments in ${query}
+2. Historical context and evolution
+3. Major challenges and opportunities
+4. Expert perspectives and diverse viewpoints
+5. Data-driven insights and statistics where available
+6. Future trends and implications
+7. Actionable recommendations
 
-Please provide a refined version that:
-1. Is more specific and focused
-2. Includes relevant context and scope
-3. Suggests the type of analysis or perspective needed
-4. Is clear about the desired output format
+Format your response with clear sections and cite relevant sources where possible.`;
 
-Respond with only the refined query, no explanations or additional text.`;
-
-            const result = await this.automateProvider('openai', refinementPrompt);
-            
-            if (result.success) {
-                return {
-                    success: true,
-                    refinedPrompt: result.response
-                };
-            } else {
-                return result;
-            }
+            return {
+                success: true,
+                refinedPrompt: refinedPrompt
+            };
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -222,18 +228,19 @@ Respond with only the refined query, no explanations or additional text.`;
     }
 
     async getOrCreateProviderTab(provider) {
+        const browserAPI = this.getBrowserAPI();
         const providerConfig = this.providers[provider];
         
         // Try to find existing tab
-        const tabs = await browser.tabs.query({ url: `${providerConfig.url}/*` });
+        const tabs = await browserAPI.tabs.query({ url: `${providerConfig.url}/*` });
         
         if (tabs.length > 0) {
             // Use existing tab
-            await browser.tabs.update(tabs[0].id, { active: true });
+            await browserAPI.tabs.update(tabs[0].id, { active: true });
             return tabs[0];
         } else {
             // Create new tab
-            const tab = await browser.tabs.create({
+            const tab = await browserAPI.tabs.create({
                 url: providerConfig.newChatUrl || providerConfig.url,
                 active: false
             });
@@ -242,12 +249,13 @@ Respond with only the refined query, no explanations or additional text.`;
     }
 
     async waitForTabLoad(tabId, timeout = 10000) {
+        const browserAPI = this.getBrowserAPI();
         return new Promise((resolve, reject) => {
             const startTime = Date.now();
             
             const checkTab = async () => {
                 try {
-                    const tab = await browser.tabs.get(tabId);
+                    const tab = await browserAPI.tabs.get(tabId);
                     
                     if (tab.status === 'complete') {
                         resolve();
@@ -270,10 +278,11 @@ Respond with only the refined query, no explanations or additional text.`;
     }
 
     async sendMessageToTab(tabId, message) {
+        const browserAPI = this.getBrowserAPI();
         return new Promise((resolve, reject) => {
-            browser.tabs.sendMessage(tabId, message, (response) => {
-                if (browser.runtime.lastError) {
-                    reject(new Error(browser.runtime.lastError.message));
+            browserAPI.tabs.sendMessage(tabId, message, (response) => {
+                if (browserAPI.runtime.lastError) {
+                    reject(new Error(browserAPI.runtime.lastError.message));
                 } else {
                     resolve(response || { success: false, error: 'No response from content script' });
                 }
@@ -373,8 +382,9 @@ Respond with only the refined query, no explanations or additional text.`;
     }
 
     async getGoogleAuthToken() {
+        const browserAPI = this.getBrowserAPI();
         try {
-            const result = await browser.identity.getAuthToken({ 
+            const result = await browserAPI.identity.getAuthToken({ 
                 interactive: true,
                 scopes: ['https://www.googleapis.com/auth/drive.file']
             });
@@ -386,6 +396,7 @@ Respond with only the refined query, no explanations or additional text.`;
     }
 
     async openDriveFolder() {
+        const browserAPI = this.getBrowserAPI();
         try {
             const activeJobs = Array.from(this.processingJobs.values());
             if (activeJobs.length === 0) {
@@ -394,7 +405,7 @@ Respond with only the refined query, no explanations or additional text.`;
 
             const latestJob = activeJobs[activeJobs.length - 1];
             if (latestJob.driveFolder) {
-                browser.tabs.create({
+                browserAPI.tabs.create({
                     url: `https://drive.google.com/drive/folders/${latestJob.driveFolder}`
                 });
                 return { success: true };

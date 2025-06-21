@@ -5,6 +5,10 @@ class ChatGPTAutomation {
         this.init();
     }
 
+    getBrowserAPI() {
+        return typeof browser !== 'undefined' ? browser : chrome;
+    }
+
     init() {
         // Wait for page to be ready
         if (document.readyState === 'loading') {
@@ -249,7 +253,8 @@ class ChatGPTAutomation {
         window.addEventListener('message', this.messageListener);
 
         // Also listen for extension messages
-        browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        const browserAPI = this.getBrowserAPI();
+        browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (message.action === 'automatePrompt') {
                 this.automatePrompt(message.prompt)
                     .then(result => sendResponse(result))
