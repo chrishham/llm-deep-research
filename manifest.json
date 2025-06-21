@@ -14,6 +14,7 @@
     "https://claude.ai/*",
     "https://grok.x.ai/*",
     "https://chat.deepseek.com/*",
+    "https://drive.google.com/*",
     "https://www.googleapis.com/*"
   ],
   

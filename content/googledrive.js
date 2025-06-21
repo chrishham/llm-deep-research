@@ -1,39 +1,75 @@
 // Google Drive automation script
-class GoogleDriveAutomation {
-    constructor() {
-        this.setupMessageListener();
-    }
-
-    setupMessageListener() {
-        if (typeof browser !== 'undefined') {
-            browser.runtime.onMessage.addListener(this.handleMessage.bind(this));
-        } else {
-            chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
+if (typeof window.GoogleDriveAutomation === 'undefined') {
+    class GoogleDriveAutomation {
+        constructor() {
+            this.isInitialized = false;
+            this.setupMessageListener();
+            this.isInitialized = true;
+            console.log('Google Drive automation script initialized');
         }
-    }
 
-    async handleMessage(message, sender, sendResponse) {
+        setupMessageListener() {
+            const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+            
+            // Create bound handler if it doesn't exist
+            if (!this.boundHandleMessage) {
+                this.boundHandleMessage = this.handleMessage.bind(this);
+            }
+            
+            // Remove any existing listeners to prevent duplicates
+            if (browserAPI.runtime.onMessage.hasListener(this.boundHandleMessage)) {
+                console.log('Removing existing message listener');
+                browserAPI.runtime.onMessage.removeListener(this.boundHandleMessage);
+            }
+            
+            console.log('Adding new message listener');
+            browserAPI.runtime.onMessage.addListener(this.boundHandleMessage);
+        }
+
+    handleMessage(message, sender, sendResponse) {
         console.log('Google Drive content script received:', message);
         
         try {
             switch (message.action) {
+                case 'ping':
+                    console.log('Responding to ping with success');
+                    sendResponse({ success: true, message: 'Google Drive content script ready' });
+                    return false; // Synchronous response
+                    
                 case 'createFolder':
-                    const result = await this.createFolder(message.folderName);
-                    sendResponse(result);
-                    break;
+                    this.createFolder(message.folderName)
+                        .then(result => {
+                            console.log('Folder creation result:', result);
+                            sendResponse(result);
+                        })
+                        .catch(error => {
+                            console.error('Folder creation error:', error);
+                            sendResponse({ success: false, error: error.message });
+                        });
+                    return true; // Asynchronous response
+                    
                 case 'uploadFile':
-                    const uploadResult = await this.uploadFile(message.fileName, message.content, message.folderId);
-                    sendResponse(uploadResult);
-                    break;
+                    this.uploadFile(message.fileName, message.content, message.folderId)
+                        .then(uploadResult => {
+                            console.log('Upload result:', uploadResult);
+                            sendResponse(uploadResult);
+                        })
+                        .catch(error => {
+                            console.error('Upload error:', error);
+                            sendResponse({ success: false, error: error.message });
+                        });
+                    return true; // Asynchronous response
+                    
                 default:
+                    console.log('Unknown action:', message.action);
                     sendResponse({ success: false, error: 'Unknown action' });
+                    return false; // Synchronous response
             }
         } catch (error) {
             console.error('Google Drive automation error:', error);
             sendResponse({ success: false, error: error.message });
+            return false; // Synchronous response
         }
-        
-        return true;
     }
 
     async waitForElement(selector, timeout = 10000) {
@@ -67,10 +103,15 @@ class GoogleDriveAutomation {
     async createFolder(folderName) {
         try {
             // Wait for Drive to load
-            await this.waitForElement('[data-tooltip="New"]', 15000);
+            await this.waitForElement('[data-tooltip="New"], [aria-label*="New"], .a-s-T', 15000);
             
             // Click "New" button
-            const newButton = document.querySelector('[data-tooltip="New"]');
+            const newButton = document.querySelector('[data-tooltip="New"]') ||
+                            document.querySelector('[aria-label*="New"]') ||
+                            document.querySelector('.a-s-T') ||
+                            Array.from(document.querySelectorAll('button')).find(btn => 
+                                btn.textContent.toLowerCase().includes('new'));
+            
             if (!newButton) {
                 throw new Error('Could not find New button');
             }
@@ -79,9 +120,9 @@ class GoogleDriveAutomation {
             // Wait for dropdown and click "Folder"
             await new Promise(resolve => setTimeout(resolve, 1000));
             const folderOption = document.querySelector('[role="menuitem"] [data-tooltip="Folder"]') || 
-                                document.querySelector('[role="menuitem"]:has-text("Folder")') ||
+                                document.querySelector('[aria-label*="Folder"]') ||
                                 Array.from(document.querySelectorAll('[role="menuitem"]')).find(el => 
-                                    el.textContent.includes('Folder'));
+                                    el.textContent.toLowerCase().includes('folder'));
             
             if (!folderOption) {
                 throw new Error('Could not find Folder option in menu');
@@ -91,8 +132,10 @@ class GoogleDriveAutomation {
             // Wait for folder name input and enter name
             await new Promise(resolve => setTimeout(resolve, 1000));
             const nameInput = document.querySelector('input[aria-label*="Name"]') ||
+                            document.querySelector('input[aria-label*="name"]') ||
                             document.querySelector('input[placeholder*="folder"]') ||
-                            document.querySelector('.docs-dialog input[type="text"]');
+                            document.querySelector('.docs-dialog input[type="text"]') ||
+                            document.querySelector('input[type="text"]:not([hidden])');
             
             if (!nameInput) {
                 throw new Error('Could not find folder name input');
@@ -103,9 +146,9 @@ class GoogleDriveAutomation {
 
             // Click Create button
             const createButton = document.querySelector('button[aria-label*="Create"]') ||
-                               document.querySelector('button:has-text("Create")') ||
+                               document.querySelector('button[data-mdc-dialog-action="ok"]') ||
                                Array.from(document.querySelectorAll('button')).find(btn => 
-                                   btn.textContent.includes('Create'));
+                                   btn.textContent.toLowerCase().includes('create'));
             
             if (!createButton) {
                 throw new Error('Could not find Create button');
@@ -116,8 +159,8 @@ class GoogleDriveAutomation {
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Try to find the newly created folder
-            const folderElement = Array.from(document.querySelectorAll('[data-target]')).find(el => 
-                el.textContent.includes(folderName));
+            const folderElement = Array.from(document.querySelectorAll('[data-target], .a-s-fa-Ha-pa, [role="gridcell"]')).find(el => 
+                el.textContent && el.textContent.includes(folderName));
             
             const folderId = folderElement ? folderElement.getAttribute('data-target') : `folder_${Date.now()}`;
 
@@ -186,7 +229,11 @@ class GoogleDriveAutomation {
             return { success: false, error: error.message };
         }
     }
-}
+    }
 
-// Initialize the automation when the script loads
-const driveAutomation = new GoogleDriveAutomation();
+    // Initialize the automation when the script loads
+    window.GoogleDriveAutomation = GoogleDriveAutomation;
+    window.driveAutomation = new GoogleDriveAutomation();
+} else {
+    console.log('Google Drive automation script already loaded');
+}

@@ -261,7 +261,7 @@ Respond with only the refined query, no explanations or additional text.`;
         }
     }
 
-    async waitForTabLoad(tabId, timeout = 10000) {
+    async waitForTabLoad(tabId, timeout = 15000) {
         const browserAPI = this.getBrowserAPI();
         return new Promise((resolve, reject) => {
             const startTime = Date.now();
@@ -271,7 +271,8 @@ Respond with only the refined query, no explanations or additional text.`;
                     const tab = await browserAPI.tabs.get(tabId);
                     
                     if (tab.status === 'complete') {
-                        resolve();
+                        // Add additional delay to ensure content script is loaded
+                        setTimeout(resolve, 2000);
                         return;
                     }
                     
@@ -290,17 +291,103 @@ Respond with only the refined query, no explanations or additional text.`;
         });
     }
 
-    async sendMessageToTab(tabId, message) {
+    async sendMessageToTab(tabId, message, timeout = 10000) {
         const browserAPI = this.getBrowserAPI();
         return new Promise((resolve, reject) => {
+            console.log(`Sending message to tab ${tabId}:`, message);
+            
+            // Add timeout to prevent hanging
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Message timeout - content script may not be loaded'));
+            }, timeout);
+
             browserAPI.tabs.sendMessage(tabId, message, (response) => {
+                clearTimeout(timeoutId);
+                
+                console.log(`Response from tab ${tabId}:`, response, 'Error:', browserAPI.runtime.lastError);
+                
                 if (browserAPI.runtime.lastError) {
-                    reject(new Error(browserAPI.runtime.lastError.message));
+                    const error = browserAPI.runtime.lastError.message;
+                    // Provide more specific error information
+                    if (error.includes('Receiving end does not exist')) {
+                        reject(new Error('Content script not loaded on tab. Please refresh the page and try again.'));
+                    } else {
+                        reject(new Error(error));
+                    }
                 } else {
                     resolve(response || { success: false, error: 'No response from content script' });
                 }
             });
         });
+    }
+
+    async verifyContentScript(tabId, scriptPath) {
+        const browserAPI = this.getBrowserAPI();
+        
+        // First, check if the content script is already responding
+        try {
+            const response = await this.sendMessageToTab(tabId, { action: 'ping' }, 3000);
+            console.log('Initial ping response:', response);
+            
+            if (response && typeof response === 'object' && response.success === true) {
+                console.log('Content script already loaded and responding');
+                return true;
+            }
+        } catch (error) {
+            console.log('Content script not responding to initial ping:', error.message);
+        }
+
+        // Check if script is already loaded but not responding by examining the page
+        try {
+            const checkScriptLoaded = await browserAPI.tabs.executeScript(tabId, {
+                code: 'typeof window.GoogleDriveAutomation !== "undefined" && window.driveAutomation instanceof window.GoogleDriveAutomation'
+            });
+            
+            if (checkScriptLoaded && checkScriptLoaded[0] === true) {
+                console.log('Script is loaded but not responding, trying to reinitialize...');
+                
+                // Try to reinitialize the message listener
+                await browserAPI.tabs.executeScript(tabId, {
+                    code: `
+                        if (window.driveAutomation && window.driveAutomation.setupMessageListener) {
+                            window.driveAutomation.setupMessageListener();
+                        }
+                    `
+                });
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Try ping again
+                const retryResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 3000);
+                console.log('Retry ping response:', retryResponse);
+                if (retryResponse && typeof retryResponse === 'object' && retryResponse.success === true) {
+                    return true;
+                }
+            }
+        } catch (checkError) {
+            console.log('Could not check if script is loaded:', checkError.message);
+        }
+
+        // Script not loaded or not working, try manual injection
+        console.log('Attempting manual script injection for', scriptPath);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await browserAPI.tabs.executeScript(tabId, { 
+                file: scriptPath,
+                runAt: 'document_idle'
+            });
+            
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const retryResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 5000);
+            console.log('Final ping response:', retryResponse);
+            
+            return retryResponse && typeof retryResponse === 'object' && retryResponse.success === true;
+        } catch (injectionError) {
+            console.error('Failed to inject content script:', injectionError);
+            return false;
+        }
     }
 
     getProgress() {
@@ -325,11 +412,10 @@ Respond with only the refined query, no explanations or additional text.`;
 
     async saveToGoogleDrive(driveTabId, provider, content) {
         try {
-            const browserAPI = this.getBrowserAPI();
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = `${timestamp}_${provider}.md`;
 
-            const result = await browserAPI.tabs.sendMessage(driveTabId, {
+            const result = await this.sendMessageToTab(driveTabId, {
                 action: 'uploadFile',
                 fileName: filename,
                 content: content
@@ -351,15 +437,26 @@ Respond with only the refined query, no explanations or additional text.`;
                 active: false
             });
 
-            // Wait for page to load and create folder
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // Wait for tab to load completely
+            await this.waitForTabLoad(tab.id, 20000);
             
-            const result = await browserAPI.tabs.sendMessage(tab.id, {
+            // Verify content script is loaded and inject if necessary
+            const scriptReady = await this.verifyContentScript(tab.id, 'content/googledrive.js');
+            if (!scriptReady) {
+                throw new Error('Failed to load Google Drive content script');
+            }
+            
+            // Send message using the improved sendMessageToTab method
+            const result = await this.sendMessageToTab(tab.id, {
                 action: 'createFolder',
                 folderName: folderName
             });
 
-            return { success: true, folderId: result.folderId, tabId: tab.id };
+            if (result.success) {
+                return { success: true, folderId: result.folderId, tabId: tab.id };
+            } else {
+                return { success: false, error: result.error };
+            }
         } catch (error) {
             console.error('Drive folder creation error:', error);
             return { success: false, error: error.message };
