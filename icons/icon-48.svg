@@ -1,0 +1,65 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient48" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="brainGradient48" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4ecdc4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow48">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="48" height="48" rx="6" fill="url(#bgGradient48)"/>
+  
+  <!-- Neural network nodes -->
+  <circle cx="12" cy="15" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="24" cy="12" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="36" cy="15" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="18" cy="24" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="30" cy="24" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="24" cy="33" r="1.5" fill="#ffffff" opacity="0.8"/>
+  
+  <!-- Neural connections -->
+  <line x1="12" y1="15" x2="18" y2="24" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="24" y1="12" x2="18" y2="24" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="36" y1="15" x2="30" y2="24" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="24" y1="12" x2="30" y2="24" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="18" y1="24" x2="24" y2="33" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="30" y1="24" x2="24" y2="33" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  <line x1="18" y1="24" x2="30" y2="24" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+  
+  <!-- Central brain -->
+  <g transform="translate(24, 24)">
+    <path d="M-6,-3 C-6,-5 -4.5,-6.5 -2.25,-6.5 C-0.75,-7.5 0.75,-7.5 2.25,-6.5 C4.5,-6.5 6,-5 6,-3 C6,-2.25 5.25,-1.5 5.25,-0.75 C6,0 6,1.5 5.25,2.25 C4.5,3 3,3 2.25,2.25 C0.75,3 -0.75,3 -2.25,2.25 C-3,3 -4.5,3 -5.25,2.25 C-6,1.5 -6,0 -5.25,-0.75 C-5.7,-1.5 -6,-2.25 -6,-3 Z" 
+          fill="url(#brainGradient48)" filter="url(#glow48)"/>
+    
+    <!-- Brain folds -->
+    <path d="M-3,-2.25 C-2.25,-3 -0.75,-3 0,-2.25 C0.75,-3 2.25,-3 3,-2.25" stroke="#ffffff" stroke-width="0.5" fill="none" opacity="0.8"/>
+    <path d="M-2.25,-0.75 C-1.5,-1.5 0,-1.5 0.75,-0.75 C1.5,-1.5 3,-1.5 3.75,-0.75" stroke="#ffffff" stroke-width="0.5" fill="none" opacity="0.8"/>
+    <path d="M-3,0.75 C-2.25,0 -0.75,0 0,0.75 C0.75,0 2.25,0 3,0.75" stroke="#ffffff" stroke-width="0.5" fill="none" opacity="0.8"/>
+  </g>
+  
+  <!-- Research magnifier -->
+  <g transform="translate(34, 34)">
+    <circle cx="0" cy="0" r="3" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.9"/>
+    <circle cx="0" cy="0" r="2" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.7"/>
+    <line x1="2.1" y1="2.1" x2="4.2" y2="4.2" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+  </g>
+  
+  <!-- Provider indicators -->
+  <circle cx="7" cy="7" r="1" fill="#ffd700" opacity="0.8"/>
+  <circle cx="41" cy="7" r="1" fill="#ffd700" opacity="0.8"/>
+  <circle cx="7" cy="41" r="1" fill="#ffd700" opacity="0.8"/>
+  
+  <!-- Text hint -->
+  <text x="24" y="43" text-anchor="middle" font-family="Arial, sans-serif" font-size="4" fill="#ffffff" opacity="0.6">LLM</text>
+</svg>

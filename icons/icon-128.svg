@@ -1,0 +1,67 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bgGradient128" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="brainGradient128" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4ecdc4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow128">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Main background -->
+  <rect width="128" height="128" rx="16" fill="url(#bgGradient128)"/>
+  
+  <!-- Neural network nodes -->
+  <circle cx="32" cy="40" r="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="64" cy="30" r="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="96" cy="40" r="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="48" cy="64" r="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="80" cy="64" r="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="64" cy="90" r="4" fill="#ffffff" opacity="0.8"/>
+  
+  <!-- Neural network connections -->
+  <line x1="32" y1="40" x2="48" y2="64" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="64" y1="30" x2="48" y2="64" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="96" y1="40" x2="80" y2="64" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="64" y1="30" x2="80" y2="64" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="48" y1="64" x2="64" y2="90" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="80" y1="64" x2="64" y2="90" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  <line x1="48" y1="64" x2="80" y2="64" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Central brain/AI icon -->
+  <g transform="translate(64, 64)">
+    <!-- Brain outline -->
+    <path d="M-16,-8 C-16,-14 -12,-18 -6,-18 C-2,-20 2,-20 6,-18 C12,-18 16,-14 16,-8 C16,-6 15,-4 14,-2 C16,0 16,4 14,6 C12,8 8,8 6,6 C2,8 -2,8 -6,6 C-8,8 -12,8 -14,6 C-16,4 -16,0 -14,-2 C-15,-4 -16,-6 -16,-8 Z" 
+          fill="url(#brainGradient128)" filter="url(#glow128)"/>
+    
+    <!-- Brain folds/details -->
+    <path d="M-8,-6 C-6,-8 -2,-8 0,-6 C2,-8 6,-8 8,-6" stroke="#ffffff" stroke-width="1" fill="none" opacity="0.8"/>
+    <path d="M-6,-2 C-4,-4 0,-4 2,-2 C4,-4 8,-4 10,-2" stroke="#ffffff" stroke-width="1" fill="none" opacity="0.8"/>
+    <path d="M-8,2 C-6,0 -2,0 0,2 C2,0 6,0 8,2" stroke="#ffffff" stroke-width="1" fill="none" opacity="0.8"/>
+  </g>
+  
+  <!-- Research/magnifying glass accent -->
+  <g transform="translate(90, 90)">
+    <circle cx="0" cy="0" r="8" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
+    <circle cx="0" cy="0" r="5" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.7"/>
+    <line x1="6" y1="6" x2="12" y2="12" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  </g>
+  
+  <!-- Multiple provider indicators (small dots) -->
+  <circle cx="20" cy="20" r="2" fill="#ffd700" opacity="0.8"/>
+  <circle cx="108" cy="20" r="2" fill="#ffd700" opacity="0.8"/>
+  <circle cx="20" cy="108" r="2" fill="#ffd700" opacity="0.8"/>
+  
+  <!-- Subtle text hint -->
+  <text x="64" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#ffffff" opacity="0.6">LLM</text>
+</svg>

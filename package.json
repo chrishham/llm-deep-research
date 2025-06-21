@@ -30,12 +30,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/llm-deep-research"
+    "url": "https://github.com/chrishham/llm-deep-research"
   },
   "bugs": {
-    "url": "https://github.com/your-username/llm-deep-research/issues"
+    "url": "https://github.com/chrishham/llm-deep-research/issues"
   },
-  "homepage": "https://github.com/your-username/llm-deep-research#readme",
+  "homepage": "https://github.com/chrishham/llm-deep-research#readme",
   "webExt": {
     "sourceDir": ".",
     "artifactsDir": "dist",
