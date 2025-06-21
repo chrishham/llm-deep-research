@@ -26,7 +26,7 @@
   "author": "LLM Deep Research",
   "license": "MIT",
   "devDependencies": {
-    "web-ext": "^7.8.0"
+    "web-ext": "^8.8.0"
   },
   "repository": {
     "type": "git",
