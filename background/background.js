@@ -8,8 +8,8 @@ class BackgroundController {
         this.providers = {
             openai: {
                 name: 'OpenAI ChatGPT',
-                url: 'https://chat.openai.com',
-                newChatUrl: 'https://chat.openai.com/?model=gpt-4'
+                url: 'https://chatgpt.com',
+                newChatUrl: 'https://chatgpt.com/?model=gpt-4'
             },
             gemini: {
                 name: 'Google Gemini',
@@ -166,12 +166,8 @@ Respond with only the refined query, no explanations or additional text.`;
 
             this.processingJobs.set(jobId, job);
 
-            // Create Google Drive folder
-            const driveResult = await this.createDriveFolderForResearch();
-            if (driveResult.success) {
-                job.driveFolder = driveResult.folderId;
-                job.driveTabId = driveResult.tabId;
-            }
+            // Skip Google Drive for debugging - directly submit to providers
+            console.log('Skipping Google Drive creation for debugging');
 
             // Submit to all providers in parallel
             const promises = providers.map(provider => 
@@ -200,10 +196,8 @@ Respond with only the refined query, no explanations or additional text.`;
                 job.providers[provider].status = 'completed';
                 job.providers[provider].result = result.response;
                 
-                // Save to Google Drive
-                if (job.driveFolder) {
-                    await this.saveToGoogleDrive(job.driveTabId, provider, result.response);
-                }
+                // Skip Google Drive save for debugging
+                console.log(`Skipping Google Drive save for ${provider} - result available in memory`);
             } else {
                 job.providers[provider].status = 'failed';
                 job.providers[provider].error = result.error;
@@ -216,26 +210,42 @@ Respond with only the refined query, no explanations or additional text.`;
 
     async automateProvider(provider, prompt) {
         try {
+            console.log(`Starting automation for ${provider} with prompt: ${prompt.substring(0, 100)}...`);
+            
             const providerConfig = this.providers[provider];
             if (!providerConfig) {
                 throw new Error(`Unknown provider: ${provider}`);
             }
 
             // Create or find existing tab for this provider
+            console.log(`Creating/finding tab for ${provider}...`);
             const tab = await this.getOrCreateProviderTab(provider);
+            console.log(`Tab created/found: ${tab.id}, URL: ${tab.url}`);
             
             // Wait for tab to load
+            console.log(`Waiting for tab ${tab.id} to load...`);
             await this.waitForTabLoad(tab.id);
 
+            // Verify content script is loaded and inject if necessary
+            const scriptPath = `content/${provider === 'openai' ? 'chatgpt' : provider}.js`;
+            console.log(`Verifying content script: ${scriptPath}`);
+            const scriptReady = await this.verifyContentScript(tab.id, scriptPath, provider);
+            if (!scriptReady) {
+                throw new Error(`Failed to load ${provider} content script. Please refresh the tab and try again.`);
+            }
+
             // Send automation message to content script
+            console.log(`Sending automation message to ${provider} content script...`);
             const result = await this.sendMessageToTab(tab.id, {
                 action: 'automatePrompt',
                 provider: provider,
                 prompt: prompt
-            });
+            }, 1200000); // 20 minutes timeout for deep research automation
 
+            console.log(`Automation result for ${provider}:`, result);
             return result;
         } catch (error) {
+            console.error(`Automation failed for ${provider}:`, error);
             return { success: false, error: error.message };
         }
     }
@@ -244,8 +254,15 @@ Respond with only the refined query, no explanations or additional text.`;
         const browserAPI = this.getBrowserAPI();
         const providerConfig = this.providers[provider];
         
-        // Try to find existing tab
-        const tabs = await browserAPI.tabs.query({ url: `${providerConfig.url}/*` });
+        // Try to find existing tab - for OpenAI, check both old and new domains
+        let tabs;
+        if (provider === 'openai') {
+            const chatOpenAiTabs = await browserAPI.tabs.query({ url: 'https://chat.openai.com/*' });
+            const chatGptTabs = await browserAPI.tabs.query({ url: 'https://chatgpt.com/*' });
+            tabs = [...chatOpenAiTabs, ...chatGptTabs];
+        } else {
+            tabs = await browserAPI.tabs.query({ url: `${providerConfig.url}/*` });
+        }
         
         if (tabs.length > 0) {
             // Use existing tab
@@ -269,20 +286,23 @@ Respond with only the refined query, no explanations or additional text.`;
             const checkTab = async () => {
                 try {
                     const tab = await browserAPI.tabs.get(tabId);
+                    console.log(`Tab ${tabId} status: ${tab.status}, URL: ${tab.url}`);
                     
                     if (tab.status === 'complete') {
+                        console.log(`Tab ${tabId} loaded successfully`);
                         // Add additional delay to ensure content script is loaded
-                        setTimeout(resolve, 2000);
+                        setTimeout(resolve, 3000);
                         return;
                     }
                     
                     if (Date.now() - startTime > timeout) {
-                        reject(new Error('Tab load timeout'));
+                        reject(new Error(`Tab load timeout after ${timeout}ms`));
                         return;
                     }
                     
                     setTimeout(checkTab, 500);
                 } catch (error) {
+                    console.error(`Error checking tab ${tabId}:`, error);
                     reject(error);
                 }
             };
@@ -291,14 +311,14 @@ Respond with only the refined query, no explanations or additional text.`;
         });
     }
 
-    async sendMessageToTab(tabId, message, timeout = 10000) {
+    async sendMessageToTab(tabId, message, timeout = 1200000) {
         const browserAPI = this.getBrowserAPI();
         return new Promise((resolve, reject) => {
             console.log(`Sending message to tab ${tabId}:`, message);
             
-            // Add timeout to prevent hanging
+            // Add timeout to prevent hanging - increased to 20 minutes for deep research responses
             const timeoutId = setTimeout(() => {
-                reject(new Error('Message timeout - content script may not be loaded'));
+                reject(new Error('Deep research response timeout - ChatGPT took longer than 20 minutes'));
             }, timeout);
 
             browserAPI.tabs.sendMessage(tabId, message, (response) => {
@@ -312,20 +332,32 @@ Respond with only the refined query, no explanations or additional text.`;
                     if (error.includes('Receiving end does not exist')) {
                         reject(new Error('Content script not loaded on tab. Please refresh the page and try again.'));
                     } else {
-                        reject(new Error(error));
+                        reject(new Error(`Browser API error: ${error}`));
                     }
+                } else if (!response) {
+                    reject(new Error('No response from content script - may still be processing'));
                 } else {
-                    resolve(response || { success: false, error: 'No response from content script' });
+                    resolve(response);
                 }
             });
         });
     }
 
-    async verifyContentScript(tabId, scriptPath) {
+    async verifyContentScript(tabId, scriptPath, provider = null) {
         const browserAPI = this.getBrowserAPI();
+        console.log(`Verifying content script for ${provider} on tab ${tabId}, script: ${scriptPath}`);
+        
+        // Get tab info for debugging
+        try {
+            const tab = await browserAPI.tabs.get(tabId);
+            console.log(`Tab info - URL: ${tab.url}, Status: ${tab.status}`);
+        } catch (error) {
+            console.error('Failed to get tab info:', error);
+        }
         
         // First, check if the content script is already responding
         try {
+            console.log('Sending initial ping...');
             const response = await this.sendMessageToTab(tabId, { action: 'ping' }, 3000);
             console.log('Initial ping response:', response);
             
@@ -337,31 +369,149 @@ Respond with only the refined query, no explanations or additional text.`;
             console.log('Content script not responding to initial ping:', error.message);
         }
 
-        // Check if script is already loaded but not responding by examining the page
+        // Check if script is already loaded by examining the page
         try {
+            console.log('Checking if script variables exist in page...');
+            let checkCode;
+            if (provider === 'openai') {
+                checkCode = `
+                    console.log('Checking for ChatGPT automation:', typeof window.chatGPTAutomation, typeof ChatGPTAutomation);
+                    typeof ChatGPTAutomation !== "undefined"
+                `;
+            } else if (provider === 'deepseek') {
+                checkCode = `
+                    console.log('Checking for DeepSeek automation:', typeof window.deepseekAutomation, typeof DeepSeekAutomation);
+                    typeof DeepSeekAutomation !== "undefined"
+                `;
+            } else if (provider === 'claude') {
+                checkCode = `
+                    console.log('Checking for Claude automation:', typeof window.claudeAutomation, typeof ClaudeAutomation);
+                    typeof ClaudeAutomation !== "undefined"
+                `;
+            } else if (provider === 'gemini') {
+                checkCode = `
+                    console.log('Checking for Gemini automation:', typeof window.geminiAutomation, typeof GeminiAutomation);
+                    typeof GeminiAutomation !== "undefined"
+                `;
+            } else if (provider === 'grok') {
+                checkCode = `
+                    console.log('Checking for Grok automation:', typeof window.grokAutomation, typeof GrokAutomation);
+                    typeof GrokAutomation !== "undefined"
+                `;
+            } else {
+                checkCode = `
+                    console.log('Checking for Google Drive automation:', typeof window.GoogleDriveAutomation, typeof window.driveAutomation);
+                    typeof window.GoogleDriveAutomation !== "undefined"
+                `;
+            }
+            
             const checkScriptLoaded = await browserAPI.tabs.executeScript(tabId, {
-                code: 'typeof window.GoogleDriveAutomation !== "undefined" && window.driveAutomation instanceof window.GoogleDriveAutomation'
+                code: checkCode
             });
             
+            console.log('Script check result:', checkScriptLoaded);
+            
             if (checkScriptLoaded && checkScriptLoaded[0] === true) {
-                console.log('Script is loaded but not responding, trying to reinitialize...');
+                console.log('Script variables exist but not responding, trying to reinitialize...');
                 
-                // Try to reinitialize the message listener
-                await browserAPI.tabs.executeScript(tabId, {
-                    code: `
-                        if (window.driveAutomation && window.driveAutomation.setupMessageListener) {
-                            window.driveAutomation.setupMessageListener();
-                        }
-                    `
-                });
+                // Try to reinitialize the message listener based on provider
+                if (provider === 'openai') {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing ChatGPT automation...');
+                            try {
+                                if (typeof ChatGPTAutomation !== 'undefined') {
+                                    new ChatGPTAutomation();
+                                    console.log('ChatGPT automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize ChatGPT automation:', e);
+                            }
+                        `
+                    });
+                } else if (provider === 'deepseek') {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing DeepSeek automation...');
+                            try {
+                                if (typeof DeepSeekAutomation !== 'undefined') {
+                                    new DeepSeekAutomation();
+                                    console.log('DeepSeek automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize DeepSeek automation:', e);
+                            }
+                        `
+                    });
+                } else if (provider === 'claude') {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing Claude automation...');
+                            try {
+                                if (typeof ClaudeAutomation !== 'undefined') {
+                                    new ClaudeAutomation();
+                                    console.log('Claude automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize Claude automation:', e);
+                            }
+                        `
+                    });
+                } else if (provider === 'gemini') {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing Gemini automation...');
+                            try {
+                                if (typeof GeminiAutomation !== 'undefined') {
+                                    new GeminiAutomation();
+                                    console.log('Gemini automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize Gemini automation:', e);
+                            }
+                        `
+                    });
+                } else if (provider === 'grok') {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing Grok automation...');
+                            try {
+                                if (typeof GrokAutomation !== 'undefined') {
+                                    new GrokAutomation();
+                                    console.log('Grok automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize Grok automation:', e);
+                            }
+                        `
+                    });
+                } else {
+                    await browserAPI.tabs.executeScript(tabId, {
+                        code: `
+                            console.log('Reinitializing Google Drive automation...');
+                            try {
+                                if (window.driveAutomation && window.driveAutomation.setupMessageListener) {
+                                    window.driveAutomation.setupMessageListener();
+                                    console.log('Google Drive automation reinitialized');
+                                }
+                            } catch (e) {
+                                console.error('Failed to reinitialize Google Drive automation:', e);
+                            }
+                        `
+                    });
+                }
                 
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
                 // Try ping again
-                const retryResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 3000);
-                console.log('Retry ping response:', retryResponse);
-                if (retryResponse && typeof retryResponse === 'object' && retryResponse.success === true) {
-                    return true;
+                try {
+                    const retryResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 3000);
+                    console.log('Retry ping response:', retryResponse);
+                    if (retryResponse && typeof retryResponse === 'object' && retryResponse.success === true) {
+                        return true;
+                    }
+                } catch (retryError) {
+                    console.log('Retry ping failed:', retryError.message);
                 }
             }
         } catch (checkError) {
@@ -369,21 +519,35 @@ Respond with only the refined query, no explanations or additional text.`;
         }
 
         // Script not loaded or not working, try manual injection
-        console.log('Attempting manual script injection for', scriptPath);
+        console.log(`Attempting manual script injection: ${scriptPath}`);
         try {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
+            // First try to inject the script file
+            console.log('Injecting script file...');
             await browserAPI.tabs.executeScript(tabId, { 
                 file: scriptPath,
                 runAt: 'document_idle'
             });
             
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 4000));
             
-            const retryResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 5000);
-            console.log('Final ping response:', retryResponse);
-            
-            return retryResponse && typeof retryResponse === 'object' && retryResponse.success === true;
+            // Try ping one more time
+            try {
+                const finalResponse = await this.sendMessageToTab(tabId, { action: 'ping' }, 5000);
+                console.log('Final ping response:', finalResponse);
+                
+                if (finalResponse && typeof finalResponse === 'object' && finalResponse.success === true) {
+                    console.log('Content script successfully loaded after manual injection');
+                    return true;
+                } else {
+                    console.log('Content script still not responding after injection');
+                    return false;
+                }
+            } catch (finalError) {
+                console.error('Final ping failed:', finalError.message);
+                return false;
+            }
         } catch (injectionError) {
             console.error('Failed to inject content script:', injectionError);
             return false;
@@ -441,7 +605,7 @@ Respond with only the refined query, no explanations or additional text.`;
             await this.waitForTabLoad(tab.id, 20000);
             
             // Verify content script is loaded and inject if necessary
-            const scriptReady = await this.verifyContentScript(tab.id, 'content/googledrive.js');
+            const scriptReady = await this.verifyContentScript(tab.id, 'content/googledrive.js', 'googledrive');
             if (!scriptReady) {
                 throw new Error('Failed to load Google Drive content script');
             }

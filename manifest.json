@@ -10,6 +10,7 @@
     "identity",
     "tabs",
     "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
     "https://gemini.google.com/*",
     "https://claude.ai/*",
     "https://grok.x.ai/*",
@@ -36,7 +37,7 @@
   
   "content_scripts": [
     {
-      "matches": ["https://chat.openai.com/*"],
+      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
       "js": ["content/chatgpt.js"],
       "run_at": "document_end"
     },

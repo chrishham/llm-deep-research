@@ -102,57 +102,91 @@ if (typeof window.GoogleDriveAutomation === 'undefined') {
 
     async createFolder(folderName) {
         try {
-            // Wait for Drive to load
-            await this.waitForElement('[data-tooltip="New"], [aria-label*="New"], .a-s-T', 15000);
+            // Wait for Drive to load - updated selectors for new UI
+            await this.waitForElement('.ZHllM, [data-tooltip="New"], [aria-label*="New"], .a-s-T', 15000);
             
-            // Click "New" button
-            const newButton = document.querySelector('[data-tooltip="New"]') ||
+            // Click "New" button - updated to handle new structure
+            const newButton = document.querySelector('.ZHllM button.brbsPe') ||
+                            document.querySelector('.ZHllM button') ||
+                            document.querySelector('[data-tooltip="New"]') ||
                             document.querySelector('[aria-label*="New"]') ||
                             document.querySelector('.a-s-T') ||
                             Array.from(document.querySelectorAll('button')).find(btn => 
-                                btn.textContent.toLowerCase().includes('new'));
+                                btn.textContent && btn.textContent.toLowerCase().includes('new'));
             
             if (!newButton) {
                 throw new Error('Could not find New button');
             }
+            
+            console.log('Clicking New button:', newButton);
             newButton.click();
 
             // Wait for dropdown and click "Folder"
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Try multiple selectors for the folder option
             const folderOption = document.querySelector('[role="menuitem"] [data-tooltip="Folder"]') || 
                                 document.querySelector('[aria-label*="Folder"]') ||
-                                Array.from(document.querySelectorAll('[role="menuitem"]')).find(el => 
-                                    el.textContent.toLowerCase().includes('folder'));
+                                document.querySelector('[role="menuitem"] span:contains("Folder")') ||
+                                Array.from(document.querySelectorAll('[role="menuitem"], .VfPpkd-rymPhb-ibnC6b')).find(el => 
+                                    el.textContent && el.textContent.toLowerCase().includes('folder')) ||
+                                Array.from(document.querySelectorAll('div[role="menuitem"]')).find(el => 
+                                    el.querySelector('span') && el.querySelector('span').textContent.toLowerCase().includes('folder'));
             
             if (!folderOption) {
+                console.log('Available menu items:', Array.from(document.querySelectorAll('[role="menuitem"]')).map(el => el.textContent));
                 throw new Error('Could not find Folder option in menu');
             }
+            
+            console.log('Clicking Folder option:', folderOption);
             folderOption.click();
 
             // Wait for folder name input and enter name
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Updated selectors for new dialog
             const nameInput = document.querySelector('input[aria-label*="Name"]') ||
                             document.querySelector('input[aria-label*="name"]') ||
                             document.querySelector('input[placeholder*="folder"]') ||
                             document.querySelector('.docs-dialog input[type="text"]') ||
-                            document.querySelector('input[type="text"]:not([hidden])');
+                            document.querySelector('div[role="dialog"] input[type="text"]') ||
+                            document.querySelector('input[type="text"]:not([hidden])') ||
+                            document.querySelector('[data-testid="folder-name-input"]');
             
             if (!nameInput) {
+                console.log('Available inputs:', Array.from(document.querySelectorAll('input')).map(inp => ({
+                    type: inp.type,
+                    label: inp.getAttribute('aria-label'),
+                    placeholder: inp.placeholder,
+                    visible: inp.offsetParent !== null
+                })));
                 throw new Error('Could not find folder name input');
             }
             
+            console.log('Found name input:', nameInput);
+            nameInput.focus();
+            nameInput.select();
             nameInput.value = folderName;
             nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            nameInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            // Click Create button
+            // Click Create button - updated selectors
+            await new Promise(resolve => setTimeout(resolve, 500));
             const createButton = document.querySelector('button[aria-label*="Create"]') ||
                                document.querySelector('button[data-mdc-dialog-action="ok"]') ||
+                               document.querySelector('div[role="dialog"] button[data-mdc-dialog-action="accept"]') ||
+                               document.querySelector('[data-testid="create-button"]') ||
                                Array.from(document.querySelectorAll('button')).find(btn => 
-                                   btn.textContent.toLowerCase().includes('create'));
+                                   btn.textContent && btn.textContent.toLowerCase().includes('create')) ||
+                               Array.from(document.querySelectorAll('button')).find(btn => 
+                                   btn.textContent && btn.textContent.toLowerCase().includes('ok'));
             
             if (!createButton) {
+                console.log('Available buttons:', Array.from(document.querySelectorAll('button')).map(btn => btn.textContent));
                 throw new Error('Could not find Create button');
             }
+            
+            console.log('Clicking Create button:', createButton);
             createButton.click();
 
             // Wait for folder to be created and get its ID

@@ -14,9 +14,16 @@ class PopupController {
         this.cancelFeedback = document.getElementById('cancelFeedback');
         this.progressSection = document.getElementById('progressSection');
         this.progressList = document.getElementById('progressList');
-        this.viewResultsBtn = document.getElementById('viewResultsBtn');
         this.statusMessage = document.getElementById('statusMessage');
         this.settingsBtn = document.getElementById('settingsBtn');
+        
+        // New elements for results display
+        this.resultsSection = document.getElementById('resultsSection');
+        this.promptDisplay = document.getElementById('promptDisplay');
+        this.aiResponsesGrid = document.getElementById('aiResponsesGrid');
+        this.copyPromptBtn = document.getElementById('copyPromptBtn');
+        this.copyAllResponsesBtn = document.getElementById('copyAllResponsesBtn');
+        this.newQueryBtn = document.getElementById('newQueryBtn');
 
         this.currentQuery = '';
         this.finalPrompt = '';
@@ -24,6 +31,7 @@ class PopupController {
 
         this.initEventListeners();
         this.loadSavedQuery();
+        this.checkForSavedResults();
     }
 
     initEventListeners() {
@@ -33,8 +41,12 @@ class PopupController {
         this.rejectRefinement.addEventListener('click', () => this.handleRejectRefinement());
         this.submitFeedback.addEventListener('click', () => this.handleSubmitFeedback());
         this.cancelFeedback.addEventListener('click', () => this.handleCancelFeedback());
-        this.viewResultsBtn.addEventListener('click', () => this.handleViewResults());
         this.settingsBtn.addEventListener('click', () => this.handleSettings());
+        
+        // New event listeners for results display
+        this.copyPromptBtn.addEventListener('click', () => this.handleCopyPrompt());
+        this.copyAllResponsesBtn.addEventListener('click', () => this.handleCopyAllResponses());
+        this.newQueryBtn.addEventListener('click', () => this.handleNewQuery());
         
         this.queryInput.addEventListener('input', () => this.saveQuery());
         
@@ -62,6 +74,12 @@ class PopupController {
             console.error('Error loading saved query:', error);
         }
     }
+
+    async checkForSavedResults() {
+        // Removed saved results functionality
+    }
+
+
 
     getBrowserAPI() {
         return typeof browser !== 'undefined' ? browser : chrome;
@@ -193,7 +211,9 @@ class PopupController {
 
         this.isProcessing = true;
         this.setButtonsDisabled(true);
-        this.showProgressSection(selectedProviders);
+        
+        // Clear previous results and show loading columns immediately
+        this.showLoadingResults(selectedProviders, query);
         
         try {
             const response = await this.sendToBackground('submitToProviders', {
@@ -202,7 +222,8 @@ class PopupController {
             });
 
             if (response.success) {
-                this.showStatus('Opening tabs and submitting to all providers!', 'success');
+                const providerNames = selectedProviders.map(p => p === 'openai' ? 'ChatGPT' : p.charAt(0).toUpperCase() + p.slice(1)).join(', ');
+                this.showStatus(`Submitting to ${providerNames}... Please wait for the complete response.`, 'info');
                 this.monitorProgress();
             } else {
                 this.showStatus(`Failed to submit research: ${response.error}`, 'error');
@@ -218,22 +239,50 @@ class PopupController {
         return Array.from(checkboxes).map(cb => cb.value);
     }
 
-    showProgressSection(providers) {
-        this.progressList.innerHTML = '';
+    showLoadingResults(providers, query) {
+        // Clear any previous results
+        this.aiResponsesGrid.innerHTML = '';
         
+        // Set the prompt display
+        this.promptDisplay.value = query;
+        
+        // Create loading columns for each provider
         providers.forEach(provider => {
-            const item = document.createElement('div');
-            item.className = 'progress-item progress-pending';
-            item.innerHTML = `
-                <span class="font-medium capitalize">${provider}</span>
-                <span class="text-sm text-gray-500">Pending</span>
-            `;
-            item.id = `progress-${provider}`;
-            this.progressList.appendChild(item);
+            this.createLoadingColumn(provider);
         });
-
+        
+        // Set up grid layout
+        this.aiResponsesGrid.style.display = 'grid';
+        this.aiResponsesGrid.style.gridTemplateColumns = `repeat(${providers.length}, 1fr)`;
+        this.aiResponsesGrid.style.gap = '16px';
+        
+        // Hide main form and show results section
         this.mainForm.classList.add('hidden');
-        this.progressSection.classList.remove('hidden');
+        this.progressSection.classList.add('hidden');
+        this.resultsSection.classList.remove('hidden');
+    }
+
+    createLoadingColumn(provider) {
+        const providerName = this.getProviderDisplayName(provider);
+        const column = document.createElement('div');
+        column.className = 'ai-response-column loading flex flex-col h-full';
+        column.id = `column-${provider}`;
+        column.innerHTML = `
+            <div class="mb-2 flex items-center justify-between flex-shrink-0">
+                <h4 class="text-sm font-semibold text-gray-800">${providerName}</h4>
+                <div class="loading-indicator">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="flex-1 flex items-center justify-center loading-content">
+                <div class="text-center">
+                    <div class="text-lg mb-2 pulse-animation">⏳</div>
+                    <div class="text-sm text-gray-600">Waiting for response...</div>
+                </div>
+            </div>
+        `;
+        
+        this.aiResponsesGrid.appendChild(column);
     }
 
     async monitorProgress() {
@@ -244,8 +293,7 @@ class PopupController {
                 
                 if (response.allCompleted) {
                     this.isProcessing = false;
-                    this.viewResultsBtn.classList.remove('hidden');
-                    this.showStatus('Research completed! Results saved to Google Drive.', 'success');
+                    this.showResults(response.progress);
                     break;
                 }
                 
@@ -259,26 +307,211 @@ class PopupController {
 
     updateProgress(progressData) {
         Object.entries(progressData).forEach(([provider, status]) => {
-            const item = document.getElementById(`progress-${provider}`);
-            if (item) {
-                const statusSpan = item.querySelector('.text-sm');
-                item.className = `progress-item progress-${status.status}`;
-                
-                switch (status.status) {
-                    case 'running':
-                        statusSpan.innerHTML = '<div class="spinner"></div>';
-                        break;
-                    case 'completed':
-                        statusSpan.innerHTML = '<span class="text-green-600">✓ Completed</span>';
-                        break;
-                    case 'failed':
-                        statusSpan.innerHTML = '<span class="text-red-600">✗ Failed</span>';
-                        break;
-                    default:
-                        statusSpan.innerHTML = '<span class="text-gray-500">Pending</span>';
-                }
+            const column = document.getElementById(`column-${provider}`);
+            if (column) {
+                this.updateColumnStatus(column, provider, status);
             }
         });
+    }
+
+    updateColumnStatus(column, provider, status) {
+        const loadingIndicator = column.querySelector('.loading-indicator');
+        const loadingContent = column.querySelector('.loading-content');
+        
+        switch (status.status) {
+            case 'running':
+                column.className = 'ai-response-column loading flex flex-col h-full';
+                if (loadingContent) {
+                    loadingContent.innerHTML = `
+                        <div class="text-center">
+                            <div class="text-lg mb-2 pulse-animation">⏳</div>
+                            <div class="text-sm text-blue-600">Generating response...</div>
+                        </div>
+                    `;
+                }
+                break;
+            case 'completed':
+                if (status.result) {
+                    this.populateColumnWithResult(column, provider, status.result);
+                }
+                break;
+            case 'failed':
+                this.populateColumnWithError(column, provider, status.error || 'Unknown error');
+                break;
+        }
+    }
+
+    showResults(progressData) {
+        // Final status check - count completed and failed providers
+        const completedProviders = [];
+        const failedProviders = [];
+        
+        Object.entries(progressData).forEach(([provider, data]) => {
+            if (data.status === 'completed' && data.result) {
+                completedProviders.push(this.getProviderDisplayName(provider));
+            } else if (data.status === 'failed') {
+                failedProviders.push(`${this.getProviderDisplayName(provider)}: ${data.error}`);
+            }
+        });
+        
+        // Save the first result for persistence
+        const firstResult = Object.values(progressData).find(data => data.status === 'completed' && data.result);
+        if (firstResult) {
+            this.saveResults(firstResult.result);
+        }
+        
+        // Show final status
+        if (completedProviders.length > 0) {
+            this.showStatus(`Completed: ${completedProviders.join(', ')}`, 'success');
+        }
+        if (failedProviders.length > 0) {
+            this.showStatus(`Failed: ${failedProviders.join(', ')}`, 'error');
+        }
+    }
+    
+    getProviderDisplayName(provider) {
+        const displayNames = {
+            'openai': 'ChatGPT',
+            'deepseek': 'DeepSeek',
+            'gemini': 'Gemini',
+            'claude': 'Claude',
+            'grok': 'Grok'
+        };
+        return displayNames[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
+    }
+    
+    populateColumnWithResult(column, provider, response) {
+        const providerName = this.getProviderDisplayName(provider);
+        column.className = 'ai-response-column completed flex flex-col h-full';
+        column.innerHTML = `
+            <div class="mb-2 flex items-center justify-between flex-shrink-0">
+                <h4 class="text-sm font-semibold text-gray-800">${providerName}</h4>
+                <button class="copy-response-btn text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded" data-provider="${providerName}">
+                    Copy
+                </button>
+            </div>
+            <textarea 
+                class="w-full p-3 border border-gray-300 rounded-md bg-white text-sm font-mono resize-none flex-1"
+                readonly
+                placeholder="Response will appear here..."
+            >${response}</textarea>
+        `;
+        
+        // Add copy functionality to the individual copy button
+        const copyBtn = column.querySelector('.copy-response-btn');
+        copyBtn.addEventListener('click', () => {
+            const textarea = column.querySelector('textarea');
+            this.copyText(textarea.value, `${providerName} response`);
+        });
+    }
+
+    populateColumnWithError(column, provider, error) {
+        const providerName = this.getProviderDisplayName(provider);
+        column.className = 'ai-response-column failed flex flex-col h-full';
+        column.innerHTML = `
+            <div class="mb-2 flex items-center justify-between flex-shrink-0">
+                <h4 class="text-sm font-semibold text-gray-800">${providerName}</h4>
+                <span class="text-xs text-red-600 font-medium">Failed</span>
+            </div>
+            <div class="flex-1 flex items-center justify-center">
+                <div class="text-center text-red-600">
+                    <div class="text-lg mb-2">❌</div>
+                    <div class="text-sm">Failed to get response</div>
+                    <div class="text-xs mt-1 text-gray-600">${error}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    saveResults(result) {
+        try {
+            const resultsData = {
+                result: result,
+                timestamp: new Date().toISOString(),
+                query: this.queryInput.value
+            };
+            this.getBrowserAPI().storage.local.set({ lastResults: resultsData });
+            console.log('Results saved to local storage');
+        } catch (error) {
+            console.error('Failed to save results:', error);
+        }
+    }
+
+    async loadSavedResults() {
+        try {
+            const result = await this.getBrowserAPI().storage.local.get('lastResults');
+            if (result.lastResults && result.lastResults.result) {
+                console.log('Found saved results from:', result.lastResults.timestamp);
+                return result.lastResults;
+            }
+        } catch (error) {
+            console.error('Error loading saved results:', error);
+        }
+        return null;
+    }
+
+    async handleCopyPrompt() {
+        try {
+            await navigator.clipboard.writeText(this.promptDisplay.value);
+            this.showStatus('Prompt copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Failed to copy prompt:', error);
+            this.showStatus('Failed to copy prompt to clipboard', 'error');
+        }
+    }
+
+    async handleCopyAllResponses() {
+        try {
+            const responses = [];
+            const columns = this.aiResponsesGrid.querySelectorAll('.ai-response-column');
+            
+            columns.forEach(column => {
+                const providerName = column.querySelector('h4').textContent;
+                const response = column.querySelector('textarea').value;
+                responses.push(`=== ${providerName} ===\n${response}\n`);
+            });
+            
+            const combinedText = responses.join('\n');
+            await navigator.clipboard.writeText(combinedText);
+            this.showStatus('All responses copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Failed to copy responses:', error);
+            this.showStatus('Failed to copy responses to clipboard', 'error');
+        }
+    }
+    
+    async copyText(text, description) {
+        try {
+            await navigator.clipboard.writeText(text);
+            this.showStatus(`${description} copied to clipboard!`, 'success');
+        } catch (error) {
+            console.error(`Failed to copy ${description}:`, error);
+            this.showStatus(`Failed to copy ${description} to clipboard`, 'error');
+        }
+    }
+
+    handleNewQuery() {
+        // Reset the UI back to the main form
+        this.resultsSection.classList.add('hidden');
+        this.progressSection.classList.add('hidden');
+        this.mainForm.classList.remove('hidden');
+        this.refinementDialog.classList.add('hidden');
+        
+        // Clear the AI responses grid and prompt display
+        this.aiResponsesGrid.innerHTML = '';
+        this.promptDisplay.value = '';
+        
+        // Clear the query input
+        this.queryInput.value = '';
+        this.saveQuery();
+        
+        // Reset state
+        this.isProcessing = false;
+        this.setButtonsDisabled(false);
+        
+        
+        // Focus on query input
+        this.queryInput.focus();
     }
 
     async handleViewResults() {

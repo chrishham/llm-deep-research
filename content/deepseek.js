@@ -25,60 +25,127 @@ class DeepSeekAutomation {
     injectAutomationScript() {
         if (this.isInjected) return;
 
-        const script = document.createElement('script');
-        script.textContent = `
-            window.deepseekAutomation = {
+        // Due to CSP restrictions, we'll handle automation directly in the content script
+        // instead of injecting a script into the page
+        window.deepseekAutomation = {
                 async submitPrompt(prompt) {
                     try {
+                        console.log('DeepSeek automation starting...');
+                        console.log('Current URL:', window.location.href);
+                        console.log('Page title:', document.title);
+                        
                         // Wait for DeepSeek's input area
-                        await this.waitForElement('textarea, [contenteditable="true"]', 10000);
+                        console.log('Waiting for input elements...');
+                        await this.waitForElement('textarea, [contenteditable="true"], #chat-input', 15000);
                         
                         // Find the input field
-                        const inputField = document.querySelector('textarea[placeholder*="Ask DeepSeek"]') ||
+                        console.log('Looking for input field...');
+                        const inputField = document.querySelector('#chat-input') ||
+                                         document.querySelector('textarea[placeholder*="Ask DeepSeek"]') ||
                                          document.querySelector('textarea[placeholder*="Type a message"]') ||
                                          document.querySelector('div[contenteditable="true"]') ||
                                          document.querySelector('textarea[data-testid="chat-input"]') ||
                                          document.querySelector('textarea');
                         
+                        console.log('Input field found:', inputField);
                         if (!inputField) {
+                            console.log('Available textareas:', document.querySelectorAll('textarea'));
+                            console.log('Available contenteditable elements:', document.querySelectorAll('[contenteditable="true"]'));
                             throw new Error('Could not find DeepSeek input field');
                         }
 
-                        // Clear and set content
-                        inputField.focus();
+                        // Use the proper DeepSeek method to fill the textarea
+                        console.log('Setting text in DeepSeek input field:', prompt.substring(0, 50) + '...');
                         
-                        if (inputField.tagName === 'TEXTAREA') {
-                            inputField.value = '';
-                            inputField.value = prompt;
-                            inputField.dispatchEvent(new Event('input', { bubbles: true }));
-                            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+                        // DeepSeek uses a contenteditable div that requires innerHTML with <p> tag
+                        if (inputField.id === 'chat-input') {
+                            console.log('Using DeepSeek-specific method for chat-input');
+                            
+                            // Clear any existing placeholder content and add the new text inside a paragraph
+                            inputField.innerHTML = prompt;
+                            console.log('Set innerHTML with <p> tag');
+                            
+                            // Set focus to the input area
+                            inputField.focus();
+                            
+                            // Dispatch an 'input' event to let the web application know the content has changed
+                            const inputEvent = new Event('input', {
+                                bubbles: true,
+                                cancelable: true,
+                            });
+                            inputField.dispatchEvent(inputEvent);
+                            console.log('Dispatched input event');
+                            
                         } else {
-                            inputField.innerHTML = '';
-                            inputField.textContent = prompt;
-                            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                            console.log('Using fallback method for other input types');
+                            // Fallback for other input types
+                            if (inputField.tagName === 'TEXTAREA') {
+                                inputField.value = prompt;
+                                inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                            } else if (inputField.contentEditable === 'true') {
+                                inputField.innerHTML = '<p>' + prompt + '</p>';
+                                inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
                         }
+                        
+                        // Verify the text was set correctly
+                        const currentContent = inputField.innerHTML || inputField.value || inputField.textContent;
+                        console.log('Final content check:', currentContent.substring(0, 100) + '...');
 
                         // Wait for UI to update
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await new Promise(resolve => setTimeout(resolve, 1000));
 
                         // Find send button
-                        const sendButton = document.querySelector('[data-testid="send-button"]') ||
-                                         document.querySelector('button[aria-label*="Send"]') ||
-                                         document.querySelector('button:has(svg[data-icon="send"])') ||
+                        console.log('Looking for send button...');
+                        const sendButton = document.querySelector('button[aria-label*="Send"]') ||
+                                         document.querySelector('[data-testid="send-button"]') ||
                                          document.querySelector('button[type="submit"]') ||
-                                         Array.from(document.querySelectorAll('button')).find(btn => 
-                                             btn.textContent.toLowerCase().includes('send') || 
-                                             btn.querySelector('svg'));
+                                         document.querySelector('button:has(svg)') ||
+                                         document.querySelector('form button') ||
+                                         Array.from(document.querySelectorAll('button')).find(btn => {
+                                             const text = btn.textContent.toLowerCase();
+                                             return text.includes('send') || text.includes('submit') || 
+                                                    btn.querySelector('svg') || btn.querySelector('path');
+                                         });
 
+                        console.log('Send button found:', sendButton);
                         if (!sendButton || sendButton.disabled) {
-                            throw new Error('Send button not found or disabled');
+                            console.log('Available buttons:', document.querySelectorAll('button'));
+                            console.log('Send button not found, trying Enter key...');
+                            
+                            // Fallback: try pressing Enter key
+                            inputField.focus();
+                            const enterEvent = new KeyboardEvent('keydown', {
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true
+                            });
+                            inputField.dispatchEvent(enterEvent);
+                            
+                            // Also try keyup
+                            const enterUpEvent = new KeyboardEvent('keyup', {
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true
+                            });
+                            inputField.dispatchEvent(enterUpEvent);
+                            
+                            console.log('Enter key pressed');
+                        } else {
+                            console.log('Clicking send button...');
+                            sendButton.click();
                         }
 
-                        sendButton.click();
-
                         // Wait for response
+                        console.log('Waiting for response to start...');
                         await this.waitForResponse();
+                        console.log('Response started, waiting for completion...');
                         const response = await this.waitForCompleteResponse();
+                        console.log('Response completed:', response.substring(0, 100) + '...');
                         
                         return { success: true, response };
                     } catch (error) {
@@ -109,7 +176,7 @@ class DeepSeekAutomation {
 
                         setTimeout(() => {
                             observer.disconnect();
-                            reject(new Error(\`Element \${selector} not found within timeout\`));
+                            reject(new Error('Element ' + selector + ' not found within timeout'));
                         }, timeout);
                     });
                 },
@@ -122,17 +189,41 @@ class DeepSeekAutomation {
                         const checkForResponse = () => {
                             // Look for DeepSeek response indicators
                             const responseIndicators = [
+                                '.ds-markdown-paragraph',
+                                'p.ds-markdown-paragraph',
                                 '[data-role="assistant"]',
                                 '.message-content',
                                 '.deepseek-response',
                                 '.assistant-message',
                                 '.response-text',
-                                '.markdown-content'
+                                '.markdown-content',
+                                '[role="assistant"]',
+                                '.message[data-role="assistant"]',
+                                '.chat-message',
+                                '.response-message'
                             ];
-
+                            
+                            console.log('Checking for response indicators...');
                             for (const selector of responseIndicators) {
                                 const elements = document.querySelectorAll(selector);
+                                console.log('Selector ' + selector + ': found ' + elements.length + ' elements');
                                 if (elements.length > 0) {
+                                    console.log('Response detected!');
+                                    resolve();
+                                    return;
+                                }
+                            }
+                            
+                            // Also check for any new messages in the chat
+                            const allMessages = document.querySelectorAll('.message, [class*="message"], [class*="chat"]');
+                            console.log('Total messages found: ' + allMessages.length);
+                            if (allMessages.length > 0) {
+                                console.log('Messages detected, checking for new content...');
+                                // Simple check: if there are more elements than before
+                                if (!window.deepseekMessageCount) {
+                                    window.deepseekMessageCount = allMessages.length;
+                                } else if (allMessages.length > window.deepseekMessageCount) {
+                                    console.log('New message detected!');
                                     resolve();
                                     return;
                                 }
@@ -163,8 +254,19 @@ class DeepSeekAutomation {
                             attempts++;
                             
                             // Find the latest DeepSeek response
-                            const responseMessages = document.querySelectorAll('[data-role="assistant"], .message-content, .deepseek-response, .assistant-message');
-                            const lastMessage = responseMessages[responseMessages.length - 1];
+                            const responseMessages = document.querySelectorAll('.ds-markdown-paragraph, p.ds-markdown-paragraph, [data-role="assistant"], [role="assistant"], .message-content, .deepseek-response, .assistant-message, .message[data-role="assistant"]');
+                            let lastMessage = responseMessages[responseMessages.length - 1];
+                            
+                            // If no specific response found, try to find any messages and get the last one
+                            if (!lastMessage) {
+                                const allMessages = document.querySelectorAll('.message, [class*="message"], [class*="chat"]');
+                                console.log('No specific response found, checking all messages: ' + allMessages.length);
+                                if (allMessages.length > 1) {
+                                    lastMessage = allMessages[allMessages.length - 1]; // Get the last message
+                                }
+                            }
+                            
+                            console.log('Last message element:', lastMessage);
                             
                             if (!lastMessage) {
                                 if (attempts >= maxAttempts) {
@@ -191,7 +293,19 @@ class DeepSeekAutomation {
                                              !document.querySelector('.loading-dots');
 
                             if (isComplete) {
-                                resolve(lastMessage.textContent.trim());
+                                // For DeepSeek, collect all markdown paragraphs from the latest response
+                                const allMarkdownParagraphs = document.querySelectorAll('.ds-markdown-paragraph, p.ds-markdown-paragraph');
+                                if (allMarkdownParagraphs.length > 0) {
+                                    // Get all paragraphs from what appears to be the latest message
+                                    const responseText = Array.from(allMarkdownParagraphs)
+                                        .map(p => p.textContent.trim())
+                                        .filter(text => text.length > 0)
+                                        .join('\n\n');
+                                    console.log('Collected DeepSeek response:', responseText.substring(0, 100) + '...');
+                                    resolve(responseText);
+                                } else {
+                                    resolve(lastMessage.textContent.trim());
+                                }
                                 return;
                             }
 
@@ -208,8 +322,13 @@ class DeepSeekAutomation {
                 },
 
                 async checkLoginStatus() {
+                    console.log('Checking DeepSeek login status...');
+                    console.log('Current URL:', window.location.href);
+                    console.log('Page title:', document.title);
+                    
                     // Check if user is logged in to DeepSeek
                     const loginIndicators = [
+                        '#chat-input',
                         'textarea[placeholder*="Ask DeepSeek"]',
                         'textarea[placeholder*="Type a message"]',
                         'div[contenteditable="true"]',
@@ -217,7 +336,9 @@ class DeepSeekAutomation {
                     ];
 
                     for (const selector of loginIndicators) {
-                        if (document.querySelector(selector)) {
+                        const element = document.querySelector(selector);
+                        console.log('Checking login indicator ' + selector + ':', element);
+                        if (element) {
                             return { loggedIn: true };
                         }
                     }
@@ -228,21 +349,29 @@ class DeepSeekAutomation {
                         'button:contains("Sign in")',
                         'a[href*="login"]',
                         '.login-form',
-                        'button:contains("登录")'  // Chinese login button
+                        'button:contains("登录")',  // Chinese login button
+                        '[data-testid="login"]',
+                        '.login-button'
                     ];
 
                     for (const selector of loginRequired) {
-                        if (document.querySelector(selector)) {
+                        const element = document.querySelector(selector);
+                        console.log('Checking login required indicator ' + selector + ':', element);
+                        if (element) {
                             return { loggedIn: false, needsLogin: true };
                         }
+                    }
+
+                    // If page doesn't seem to be loading properly
+                    if (document.body.innerText.length < 100) {
+                        console.log('Page seems empty, might be loading...');
+                        return { loggedIn: false, needsLogin: false, pageLoading: true };
                     }
 
                     return { loggedIn: false, needsLogin: false };
                 }
             };
-        `;
-
-        document.documentElement.appendChild(script);
+        
         this.isInjected = true;
     }
 
@@ -250,6 +379,11 @@ class DeepSeekAutomation {
         if (this.messageListener) return;
 
         browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.action === 'ping') {
+                sendResponse({ success: true, provider: 'deepseek' });
+                return true;
+            }
+            
             if (message.action === 'automatePrompt' && message.provider === 'deepseek') {
                 this.automatePrompt(message.prompt)
                     .then(result => sendResponse(result))
@@ -261,19 +395,40 @@ class DeepSeekAutomation {
 
     async automatePrompt(prompt) {
         try {
-            const loginStatus = await this.executeInPage('deepseekAutomation.checkLoginStatus');
+            console.log('DeepSeek automatePrompt called with:', prompt.substring(0, 100) + '...');
             
-            if (!loginStatus.loggedIn) {
+            // Call automation functions directly instead of injecting scripts
+            const loginStatus = await window.deepseekAutomation.checkLoginStatus();
+            console.log('Login status:', loginStatus);
+            
+            if (loginStatus.pageLoading) {
                 return {
                     success: false,
-                    error: 'Please log in to DeepSeek first',
-                    needsLogin: true
+                    error: 'DeepSeek page is still loading. Please wait and try again.'
                 };
             }
+            
+            if (!loginStatus.loggedIn) {
+                if (loginStatus.needsLogin) {
+                    return {
+                        success: false,
+                        error: 'Please log in to DeepSeek first. Visit https://chat.deepseek.com/ and log in, then try again.',
+                        needsLogin: true
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: 'DeepSeek interface not found. The page might not have loaded properly or the interface has changed.'
+                    };
+                }
+            }
 
-            const result = await this.executeInPage('deepseekAutomation.submitPrompt', prompt);
+            console.log('Login check passed, submitting prompt...');
+            const result = await window.deepseekAutomation.submitPrompt(prompt);
+            console.log('Automation result:', result);
             return result;
         } catch (error) {
+            console.error('DeepSeek automation error:', error);
             return {
                 success: false,
                 error: error.message
@@ -281,42 +436,6 @@ class DeepSeekAutomation {
         }
     }
 
-    async executeInPage(functionCall, ...args) {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            const resultId = 'deepseek_result_' + Date.now();
-            
-            script.textContent = `
-                (async () => {
-                    try {
-                        const result = await ${functionCall}(${args.map(arg => JSON.stringify(arg)).join(', ')});
-                        window['${resultId}'] = { success: true, result };
-                    } catch (error) {
-                        window['${resultId}'] = { success: false, error: error.message };
-                    }
-                })();
-            `;
-
-            document.documentElement.appendChild(script);
-            script.remove();
-
-            const checkResult = () => {
-                const result = window[resultId];
-                if (result) {
-                    delete window[resultId];
-                    if (result.success) {
-                        resolve(result.result);
-                    } else {
-                        reject(new Error(result.error));
-                    }
-                } else {
-                    setTimeout(checkResult, 100);
-                }
-            };
-
-            checkResult();
-        });
-    }
 }
 
 new DeepSeekAutomation();
